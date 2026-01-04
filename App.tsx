@@ -66,6 +66,14 @@ const App: React.FC = () => {
     handleVerifyInvoice(newInvoice.id);
   };
 
+  const handleDeleteInvoice = (id: string) => {
+    setInvoices(prev => prev.filter(inv => inv.id !== id));
+    if (selectedInvoiceId === id) {
+      setSelectedInvoiceId(null);
+      setCurrentView('dashboard');
+    }
+  };
+
   const renderContent = () => {
     switch (currentView) {
       case 'dashboard':
@@ -74,6 +82,7 @@ const App: React.FC = () => {
             invoices={invoices} 
             onVerify={handleVerifyInvoice} 
             onUpload={handleAddInvoice}
+            onDelete={handleDeleteInvoice}
           />
         );
       case 'verify':
@@ -84,12 +93,21 @@ const App: React.FC = () => {
             invoice={invoiceToVerify} 
             onSave={handleUpdateInvoice}
             onBack={() => handleNavigate('dashboard')}
+            onDelete={handleDeleteInvoice}
+            organization={organization!}
           />
         );
       case 'settings':
         return <Settings organization={organization} />;
       default:
-        return <Dashboard invoices={invoices} onVerify={handleVerifyInvoice} onUpload={handleAddInvoice} />;
+        return (
+           <Dashboard 
+             invoices={invoices} 
+             onVerify={handleVerifyInvoice} 
+             onUpload={handleAddInvoice} 
+             onDelete={handleDeleteInvoice}
+           />
+        );
     }
   };
 

@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useRef } from 'react';
 import { Invoice, InvoiceStatus, InvoiceType } from '../types';
 import { STATUS_ICONS, STATUS_COLORS } from '../constants';
-import { Search, UploadCloud, Loader2, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Wallet, Sparkles, AlertTriangle } from 'lucide-react';
+import { Search, UploadCloud, Loader2, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Wallet, Sparkles, AlertTriangle, Trash2 } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { extractInvoiceData, generateFinancialInsights } from '../services/geminiService';
 import clsx from 'clsx';
@@ -11,6 +11,7 @@ interface DashboardProps {
   invoices: Invoice[];
   onVerify: (id: string) => void;
   onUpload: (invoice: Invoice) => void;
+  onDelete: (id: string) => void;
 }
 
 // FIX: Added interface to strictly type the accumulator in reduce
@@ -20,7 +21,7 @@ interface ChartDataPoint {
   expense: number;
 }
 
-export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUpload }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUpload, onDelete }) => {
   const [isUploading, setIsUploading] = useState(false);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const [insights, setInsights] = useState<string | null>(null);
@@ -128,6 +129,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
       event.target.value = '';
     }
   }, [onUpload, uploadType]);
+
+  const handleDelete = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (window.confirm("Are you sure you want to delete this invoice?")) {
+      onDelete(id);
+      toast.success("Invoice deleted");
+    }
+  };
 
   const handleGenerateInsights = async () => {
     if (invoices.length === 0) {
@@ -373,12 +382,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
                         {inv.status.replace('_', ' ')}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-right">
+                    <td className="px-6 py-4 text-right flex justify-end items-center gap-2">
                       <button 
                         onClick={() => onVerify(inv.id)}
                         className={clsx("font-medium", inv.status === InvoiceStatus.REVIEW_NEEDED ? "text-blue-600 hover:text-blue-800" : "text-gray-400 hover:text-gray-600")}
                       >
                         {inv.status === InvoiceStatus.REVIEW_NEEDED ? "Verify" : "View"}
+                      </button>
+                      <button 
+                        onClick={(e) => handleDelete(e, inv.id)}
+                        className="text-gray-300 hover:text-red-500 transition-colors p-1"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </td>
                   </tr>
