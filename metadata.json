@@ -1,0 +1,7 @@
+{
+  "name": "BillFlow",
+  "description": "AI-Powered Invoice Tracker with Smart Verification and BYOS support.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
