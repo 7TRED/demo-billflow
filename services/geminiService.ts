@@ -38,6 +38,7 @@ export const extractInvoiceData = async (file: File, type: InvoiceType, customFi
     Extract the following details:
     - Counterparty Name (The name of the ${entityType}).
     - Date (YYYY-MM-DD format).
+    - Due Date (YYYY-MM-DD format). Look for "Due Date", "Payment Due", or terms indicating when payment is expected.
     - Total Amount.
     - Currency (Default to INR if symbol is ₹ or not specified but looks Indian).
     - Tax Amount (GST/VAT if visible).
@@ -70,6 +71,7 @@ export const extractInvoiceData = async (file: File, type: InvoiceType, customFi
           properties: {
             counterpartyName: { type: Type.STRING },
             invoiceDate: { type: Type.STRING },
+            dueDate: { type: Type.STRING },
             totalAmount: { type: Type.NUMBER },
             currency: { type: Type.STRING },
             taxAmount: { type: Type.NUMBER },

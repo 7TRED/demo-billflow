@@ -1,7 +1,7 @@
 import React, { useCallback, useState, useRef } from 'react';
-import { Invoice, InvoiceStatus, InvoiceType } from '../types';
-import { STATUS_ICONS, STATUS_COLORS } from '../constants';
-import { Search, UploadCloud, Loader2, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Wallet, Sparkles, AlertTriangle, Trash2 } from 'lucide-react';
+import { Invoice, InvoiceStatus, InvoiceType, PaymentStatus } from '../types';
+import { STATUS_ICONS, STATUS_COLORS, PAYMENT_STATUS_COLORS } from '../constants';
+import { Search, UploadCloud, Loader2, TrendingUp, TrendingDown, ArrowUpRight, ArrowDownRight, Wallet, Sparkles, AlertTriangle, Trash2, Clock, AlertCircle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { extractInvoiceData, generateFinancialInsights } from '../services/geminiService';
 import clsx from 'clsx';
@@ -29,19 +29,34 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
   const [uploadType, setUploadType] = useState<InvoiceType>('EXPENSE');
 
   // --- Metrics Calculation ---
-  const totalIncome = invoices
+  // 1. Receivables: Total Income Amount that is NOT paid (Partial counts as unpaid portion)
+  const totalReceivables = invoices
     .filter(i => i.type === 'INCOME')
-    .reduce((acc, i) => acc + (Number(i.extractedData?.totalAmount) || 0), 0);
-    
-  const totalExpense = invoices
-    .filter(i => i.type === 'EXPENSE')
-    .reduce((acc, i) => acc + (Number(i.extractedData?.totalAmount) || 0), 0);
+    .reduce((acc, i) => acc + (Math.max(0, (Number(i.extractedData?.totalAmount) || 0) - (i.amountPaid || 0))), 0);
 
-  const netCashFlow = totalIncome - totalExpense;
+  // 2. Payables: Total Expense Amount that is NOT paid
+  const totalPayables = invoices
+    .filter(i => i.type === 'EXPENSE')
+    .reduce((acc, i) => acc + (Math.max(0, (Number(i.extractedData?.totalAmount) || 0) - (i.amountPaid || 0))), 0);
+
+  // 3. Cash on Hand (Net): Actual Paid Income - Actual Paid Expense
+  const cashIn = invoices
+    .filter(i => i.type === 'INCOME')
+    .reduce((acc, i) => acc + (i.amountPaid || 0), 0);
+  
+  const cashOut = invoices
+    .filter(i => i.type === 'EXPENSE')
+    .reduce((acc, i) => acc + (i.amountPaid || 0), 0);
+
+  const netCashPosition = cashIn - cashOut;
+
+  // Use these for AI insights (Booked value)
+  const totalBookedIncome = invoices.filter(i => i.type === 'INCOME').reduce((acc, i) => acc + (Number(i.extractedData?.totalAmount) || 0), 0);
+  const totalBookedExpense = invoices.filter(i => i.type === 'EXPENSE').reduce((acc, i) => acc + (Number(i.extractedData?.totalAmount) || 0), 0);
+
   const pendingReviews = invoices.filter(inv => inv.status === InvoiceStatus.REVIEW_NEEDED).length;
 
   // --- Chart Data: Time Series ---
-  // FIX: Added generic type <ChartDataPoint[]> to reduce to prevent 'any' type errors on existing.income += amount
   const chartData = invoices.reduce<ChartDataPoint[]>((acc, inv) => {
     const date = inv.extractedData.invoiceDate?.substring(5) || 'N/A'; // MM-DD
     const amount = Number(inv.extractedData?.totalAmount) || 0;
@@ -61,7 +76,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
   }, []).sort((a, b) => a.date.localeCompare(b.date)).slice(-7);
 
   // --- Data for AI Insights ---
-  // FIX: Added generic type <Record<string, number>> to ensure values are numbers, not unknown
   const expensesByVendor = invoices
     .filter(i => i.type === 'EXPENSE')
     .reduce<Record<string, number>>((acc, curr) => {
@@ -75,7 +89,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
     .sort((a, b) => b.value - a.value)
     .slice(0, 5);
 
-  // FIX: Added generic type <Record<string, number>> to ensure values are numbers, not unknown
   const incomeByCustomer = invoices
     .filter(i => i.type === 'INCOME')
     .reduce<Record<string, number>>((acc, curr) => {
@@ -93,8 +106,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
   // --- Handlers ---
   const initiateUpload = (type: InvoiceType) => {
     setUploadType(type);
-    // Determine which file input to trigger (we use one ref, so just set state first)
-    // React state update is async, so we might need a small timeout or just rely on the click
     setTimeout(() => {
         fileInputRef.current?.click();
     }, 0);
@@ -115,6 +126,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
         type: uploadType,
         imageUrl: URL.createObjectURL(file), 
         status: data.confidenceScore < 80 ? InvoiceStatus.REVIEW_NEEDED : InvoiceStatus.VERIFIED,
+        // Default to UNPAID for new uploads
+        paymentStatus: PaymentStatus.UNPAID,
+        amountPaid: 0,
+        dueDate: data.dueDate, // Extracted from AI
         uploadDate: new Date().toISOString().split('T')[0],
         extractedData: data
       };
@@ -147,9 +162,9 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
     setIsGeneratingInsights(true);
     try {
       const insightText = await generateFinancialInsights({
-        totalIncome,
-        totalExpense,
-        netCashFlow,
+        totalIncome: totalBookedIncome,
+        totalExpense: totalBookedExpense,
+        netCashFlow: totalBookedIncome - totalBookedExpense,
         topVendors: vendorPieData,
         topCustomers: customerData
       });
@@ -165,6 +180,18 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
     return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(amount);
   };
 
+  // Helper to check for overdue
+  const getDisplayPaymentStatus = (inv: Invoice) => {
+    if (inv.paymentStatus === PaymentStatus.PAID) return PaymentStatus.PAID;
+    
+    // Check overdue
+    if (inv.dueDate) {
+      const today = new Date().toISOString().split('T')[0];
+      if (inv.dueDate < today) return PaymentStatus.OVERDUE;
+    }
+    return inv.paymentStatus;
+  };
+
   return (
     <div className="space-y-6 pb-20 md:pb-0">
       
@@ -172,7 +199,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Financial Overview</h1>
-          <p className="text-gray-500">Track your cash flow in real-time.</p>
+          <p className="text-gray-500">Track your cash flow and due payments.</p>
         </div>
         
         <div className="relative">
@@ -212,8 +239,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
         <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm relative overflow-hidden">
           <div className="flex justify-between items-start">
             <div>
-              <p className="text-sm text-gray-500 font-medium">Total Sales</p>
-              <h3 className="text-2xl font-bold text-green-700 mt-2">{formatCurrency(totalIncome)}</h3>
+              <p className="text-sm text-gray-500 font-medium">Receivables (Due)</p>
+              <h3 className="text-2xl font-bold text-gray-900 mt-2">{formatCurrency(totalReceivables)}</h3>
+              <p className="text-xs text-green-600 mt-1 flex items-center">
+                 <ArrowUpRight className="w-3 h-3 mr-1" />
+                 Total Booked Sales: {formatCurrency(totalBookedIncome)}
+              </p>
             </div>
             <div className="p-2 bg-green-50 rounded-lg">
               <TrendingUp className="w-6 h-6 text-green-600" />
@@ -224,8 +255,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
         <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
            <div className="flex justify-between items-start">
             <div>
-              <p className="text-sm text-gray-500 font-medium">Total Expenses</p>
-              <h3 className="text-2xl font-bold text-red-700 mt-2">{formatCurrency(totalExpense)}</h3>
+              <p className="text-sm text-gray-500 font-medium">Payables (Due)</p>
+              <h3 className="text-2xl font-bold text-gray-900 mt-2">{formatCurrency(totalPayables)}</h3>
+               <p className="text-xs text-red-600 mt-1 flex items-center">
+                 <ArrowDownRight className="w-3 h-3 mr-1" />
+                 Total Booked Exp: {formatCurrency(totalBookedExpense)}
+              </p>
             </div>
             <div className="p-2 bg-red-50 rounded-lg">
               <TrendingDown className="w-6 h-6 text-red-600" />
@@ -236,10 +271,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
         <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
            <div className="flex justify-between items-start">
             <div>
-              <p className="text-sm text-gray-500 font-medium">Net Cash Flow</p>
-              <h3 className={clsx("text-2xl font-bold mt-2", netCashFlow >= 0 ? "text-blue-700" : "text-red-700")}>
-                {formatCurrency(netCashFlow)}
+              <p className="text-sm text-gray-500 font-medium">Net Cash Position</p>
+              <h3 className={clsx("text-2xl font-bold mt-2", netCashPosition >= 0 ? "text-blue-700" : "text-red-700")}>
+                {formatCurrency(netCashPosition)}
               </h3>
+              <p className="text-xs text-gray-400 mt-1">
+                 Actual Cash Collected vs Paid
+              </p>
             </div>
             <div className="p-2 bg-blue-50 rounded-lg">
               <Wallet className="w-6 h-6 text-blue-600" />
@@ -253,7 +291,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
         {/* Chart */}
         <div className="lg:col-span-2 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <div className="flex justify-between items-center mb-6">
-             <h3 className="text-lg font-semibold text-gray-800">Cash Flow Trend</h3>
+             <h3 className="text-lg font-semibold text-gray-800">Cash Flow Trend (Booked)</h3>
              <div className="flex items-center space-x-2 text-sm text-gray-500">
                <span className="flex items-center"><div className="w-3 h-3 bg-green-600 rounded-sm mr-1"></div> Income</span>
                <span className="flex items-center"><div className="w-3 h-3 bg-red-600 rounded-sm mr-1"></div> Expense</span>
@@ -348,6 +386,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
                 <th className="px-6 py-3">Counterparty</th>
                 <th className="px-6 py-3">Date</th>
                 <th className="px-6 py-3">Amount</th>
+                <th className="px-6 py-3">Payment</th>
                 <th className="px-6 py-3">Status</th>
                 <th className="px-6 py-3 text-right">Action</th>
               </tr>
@@ -355,6 +394,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
             <tbody className="divide-y divide-gray-100">
               {invoices.map((inv) => {
                 const StatusIcon = STATUS_ICONS[inv.status];
+                const displayPaymentStatus = getDisplayPaymentStatus(inv);
+
                 return (
                   <tr key={inv.id} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4">
@@ -372,6 +413,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
                     <td className="px-6 py-4">{inv.extractedData.invoiceDate}</td>
                     <td className={clsx("px-6 py-4 font-medium", inv.type === 'INCOME' ? 'text-green-700' : 'text-gray-900')}>
                       {inv.type === 'INCOME' ? '+' : '-'} {formatCurrency(Number(inv.extractedData.totalAmount) || 0)}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col items-start gap-1">
+                        <span className={clsx("inline-flex items-center px-2 py-0.5 rounded text-xs font-medium uppercase tracking-wide", PAYMENT_STATUS_COLORS[displayPaymentStatus])}>
+                          {displayPaymentStatus}
+                        </span>
+                        {displayPaymentStatus !== PaymentStatus.PAID && inv.dueDate && (
+                           <span className={clsx("text-xs flex items-center", displayPaymentStatus === PaymentStatus.OVERDUE ? "text-red-600 font-bold" : "text-gray-400")}>
+                             <Clock className="w-3 h-3 mr-1" /> Due: {inv.dueDate.substring(5)}
+                           </span>
+                        )}
+                         {displayPaymentStatus === PaymentStatus.PARTIAL && (
+                           <span className="text-xs text-gray-500">
+                             Pd: {formatCurrency(inv.amountPaid)}
+                           </span>
+                        )}
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <span className={clsx(
@@ -401,7 +459,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ invoices, onVerify, onUplo
               })}
               {invoices.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={7} className="px-6 py-12 text-center text-gray-500">
                     <UploadCloud className="w-12 h-12 mx-auto text-gray-300 mb-3" />
                     No transactions yet. Add a Sale or Expense to start!
                   </td>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, FileCheck, Settings, Menu, X, Wallet } from 'lucide-react';
+import { LayoutDashboard, FileCheck, Settings, Menu, X, Wallet, ListFilter } from 'lucide-react';
 import { AppView, Organization } from '../types';
 import clsx from 'clsx';
 
@@ -41,6 +41,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onNavigat
         </div>
         <div className="flex-1 px-4 py-6 space-y-2">
           <NavItem view="dashboard" icon={LayoutDashboard} label="Dashboard" />
+          <NavItem view="transactions" icon={ListFilter} label="Transactions" />
           <NavItem view="verify" icon={FileCheck} label="Smart Verify" />
           <NavItem view="settings" icon={Settings} label="Settings" />
         </div>
@@ -73,6 +74,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, currentView, onNavigat
         {isMobileMenuOpen && (
           <div className="absolute inset-0 top-16 bg-white z-10 flex flex-col p-4 space-y-2 md:hidden">
             <NavItem view="dashboard" icon={LayoutDashboard} label="Dashboard" />
+            <NavItem view="transactions" icon={ListFilter} label="Transactions" />
             <NavItem view="verify" icon={FileCheck} label="Smart Verify" />
             <NavItem view="settings" icon={Settings} label="Settings" />
             <div className="pt-4 mt-4 border-t border-gray-100 flex items-center">

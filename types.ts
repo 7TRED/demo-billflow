@@ -1,11 +1,18 @@
 import React from 'react';
 
-export type AppView = 'dashboard' | 'verify' | 'settings';
+export type AppView = 'dashboard' | 'transactions' | 'verify' | 'settings';
 
 export enum InvoiceStatus {
   PROCESSING = 'processing',
   REVIEW_NEEDED = 'review_needed',
   VERIFIED = 'verified',
+}
+
+export enum PaymentStatus {
+  PAID = 'paid',
+  UNPAID = 'unpaid',
+  PARTIAL = 'partial',
+  OVERDUE = 'overdue',
 }
 
 export type InvoiceType = 'INCOME' | 'EXPENSE';
@@ -33,6 +40,7 @@ export interface LineItem {
 export interface ExtractedData {
   counterpartyName: string; // Vendor for Expenses, Customer for Income
   invoiceDate: string; // YYYY-MM-DD
+  dueDate?: string; // YYYY-MM-DD
   totalAmount: number;
   currency: string;
   taxAmount?: number;
@@ -50,6 +58,11 @@ export interface Invoice {
   uploadDate: string;
   extractedData: ExtractedData;
   storagePath?: string;
+  
+  // Payment Tracking
+  paymentStatus: PaymentStatus;
+  amountPaid: number;
+  dueDate?: string;
 }
 
 export interface MetricCardProps {

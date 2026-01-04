@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from './components/Layout';
 import { Dashboard } from './components/Dashboard';
+import { Transactions } from './components/Transactions';
 import { SmartVerify } from './components/SmartVerify';
 import { Settings } from './components/Settings';
 import { OnboardingFlow } from './components/OnboardingFlow';
@@ -82,6 +83,14 @@ const App: React.FC = () => {
             invoices={invoices} 
             onVerify={handleVerifyInvoice} 
             onUpload={handleAddInvoice}
+            onDelete={handleDeleteInvoice}
+          />
+        );
+      case 'transactions':
+        return (
+          <Transactions 
+            invoices={invoices}
+            onVerify={handleVerifyInvoice}
             onDelete={handleDeleteInvoice}
           />
         );

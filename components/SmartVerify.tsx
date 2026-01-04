@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Invoice, ExtractedData, InvoiceStatus, InvoiceType, Organization } from '../types';
-import { ArrowLeft, Save, AlertTriangle, Check, ZoomIn, ZoomOut, ArrowUpRight, ArrowDownRight, Trash2, FileOutput } from 'lucide-react';
+import { Invoice, ExtractedData, InvoiceStatus, InvoiceType, Organization, PaymentStatus } from '../types';
+import { ArrowLeft, Save, AlertTriangle, Check, ZoomIn, ZoomOut, ArrowUpRight, ArrowDownRight, Trash2, FileOutput, CreditCard } from 'lucide-react';
 import clsx from 'clsx';
 import toast from 'react-hot-toast';
 import { DigitalInvoice } from './DigitalInvoice';
@@ -19,6 +19,11 @@ export const SmartVerify: React.FC<SmartVerifyProps> = ({ invoice, onSave, onBac
   const [zoom, setZoom] = useState(1);
   const [hasChanges, setHasChanges] = useState(false);
   const [showDigitalInvoice, setShowDigitalInvoice] = useState(false);
+  
+  // Payment State
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(invoice.paymentStatus);
+  const [amountPaid, setAmountPaid] = useState<number>(invoice.amountPaid);
+  const [dueDate, setDueDate] = useState<string>(invoice.dueDate || invoice.extractedData.dueDate || '');
 
   // If confidence is low, we can highlight the background of the input
   const isLowConfidence = (score: number) => score < 80;
@@ -40,12 +45,31 @@ export const SmartVerify: React.FC<SmartVerifyProps> = ({ invoice, onSave, onBac
     setHasChanges(true);
   };
 
+  // Logic to update amount paid when status changes
+  const handlePaymentStatusChange = (status: PaymentStatus) => {
+    setPaymentStatus(status);
+    setHasChanges(true);
+    
+    if (status === PaymentStatus.PAID) {
+      setAmountPaid(data.totalAmount);
+    } else if (status === PaymentStatus.UNPAID) {
+      setAmountPaid(0);
+    }
+    // Partial leaves amountPaid as is (or user edits it)
+  };
+
   const handleSave = () => {
     const updatedInvoice: Invoice = {
       ...invoice,
       type: type,
-      extractedData: data,
-      status: InvoiceStatus.VERIFIED
+      extractedData: {
+          ...data,
+          dueDate: dueDate // Sync extracted data due date too
+      },
+      status: InvoiceStatus.VERIFIED,
+      paymentStatus,
+      amountPaid,
+      dueDate
     };
     onSave(updatedInvoice);
     toast.success("Transaction verified and saved!");
@@ -57,6 +81,8 @@ export const SmartVerify: React.FC<SmartVerifyProps> = ({ invoice, onSave, onBac
       toast.success("Invoice deleted");
     }
   };
+
+  const balanceDue = Math.max(0, data.totalAmount - amountPaid);
 
   return (
     <>
@@ -166,8 +192,65 @@ export const SmartVerify: React.FC<SmartVerifyProps> = ({ invoice, onSave, onBac
           {/* Scrollable Form */}
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
             
+            {/* Payment & Status Section */}
+            <div className="space-y-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+               <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center">
+                 <CreditCard className="w-4 h-4 mr-2" />
+                 Payment & Status
+               </h3>
+               
+               <div className="grid grid-cols-2 gap-4">
+                 <div>
+                    <label className="text-xs font-medium text-gray-500 block mb-1">Status</label>
+                    <select
+                      value={paymentStatus}
+                      onChange={(e) => handlePaymentStatusChange(e.target.value as PaymentStatus)}
+                      className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value={PaymentStatus.UNPAID}>Unpaid</option>
+                      <option value={PaymentStatus.PAID}>Paid</option>
+                      <option value={PaymentStatus.PARTIAL}>Partial</option>
+                    </select>
+                 </div>
+                 <div>
+                    <label className="text-xs font-medium text-gray-500 block mb-1">Due Date</label>
+                    <input 
+                      type="date"
+                      value={dueDate}
+                      onChange={(e) => { setDueDate(e.target.value); setHasChanges(true); }}
+                      className="w-full p-2 bg-white text-gray-900 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500"
+                    />
+                 </div>
+               </div>
+
+               <div>
+                  <div className="flex justify-between text-xs font-medium text-gray-500 mb-1">
+                    <label>Amount Paid</label>
+                    <span>Balance Due: <span className="text-gray-900 font-bold">{data.currency === 'INR' ? '₹' : '$'}{balanceDue.toFixed(2)}</span></span>
+                  </div>
+                  <div className="relative">
+                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">
+                        {data.currency === 'INR' ? '₹' : '$'}
+                      </span>
+                      <input 
+                        type="number"
+                        value={amountPaid}
+                        onChange={(e) => { setAmountPaid(parseFloat(e.target.value)); setHasChanges(true); }}
+                        disabled={paymentStatus === PaymentStatus.UNPAID || paymentStatus === PaymentStatus.PAID}
+                        className={clsx(
+                          "w-full pl-7 p-2 text-gray-900 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500",
+                          (paymentStatus === PaymentStatus.UNPAID || paymentStatus === PaymentStatus.PAID) ? "bg-gray-100" : "bg-white"
+                        )}
+                      />
+                  </div>
+                  {paymentStatus === PaymentStatus.PARTIAL && (
+                    <p className="text-xs text-blue-600 mt-1">Enter the amount paid so far.</p>
+                  )}
+               </div>
+            </div>
+
             <div className="space-y-4">
-              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b pb-2">Details</h3>
+              <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider border-b pb-2">Document Details</h3>
               
               <div className="space-y-1">
                 <label className="text-xs font-medium text-gray-500">
@@ -183,7 +266,7 @@ export const SmartVerify: React.FC<SmartVerifyProps> = ({ invoice, onSave, onBac
 
               <div className="grid grid-cols-2 gap-4">
                  <div className="space-y-1">
-                  <label className="text-xs font-medium text-gray-500">Date</label>
+                  <label className="text-xs font-medium text-gray-500">Invoice Date</label>
                   <input 
                     type="date" 
                     value={data.invoiceDate}

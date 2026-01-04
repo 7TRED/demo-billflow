@@ -1,4 +1,4 @@
-import { Invoice, InvoiceStatus } from './types';
+import { Invoice, InvoiceStatus, PaymentStatus } from './types';
 import { FileText, AlertCircle, CheckCircle } from 'lucide-react';
 
 export const MOCK_INVOICES: Invoice[] = [
@@ -7,6 +7,9 @@ export const MOCK_INVOICES: Invoice[] = [
     type: 'EXPENSE',
     imageUrl: 'https://picsum.photos/600/800?random=1',
     status: InvoiceStatus.REVIEW_NEEDED,
+    paymentStatus: PaymentStatus.UNPAID,
+    amountPaid: 0,
+    dueDate: '2023-11-24',
     uploadDate: '2023-10-25',
     extractedData: {
       counterpartyName: 'Ramesh Electronics',
@@ -25,6 +28,9 @@ export const MOCK_INVOICES: Invoice[] = [
     type: 'EXPENSE',
     imageUrl: 'https://picsum.photos/600/800?random=2',
     status: InvoiceStatus.VERIFIED,
+    paymentStatus: PaymentStatus.PAID,
+    amountPaid: 1499.00,
+    dueDate: '2023-10-19',
     uploadDate: '2023-10-20',
     extractedData: {
       counterpartyName: 'Airtel Business',
@@ -42,6 +48,9 @@ export const MOCK_INVOICES: Invoice[] = [
     type: 'INCOME',
     imageUrl: 'https://picsum.photos/600/800?random=3',
     status: InvoiceStatus.VERIFIED,
+    paymentStatus: PaymentStatus.PARTIAL,
+    amountPaid: 20000.00,
+    dueDate: '2023-11-15',
     uploadDate: '2023-10-18',
     extractedData: {
       counterpartyName: 'Sharma Consulting',
@@ -59,6 +68,9 @@ export const MOCK_INVOICES: Invoice[] = [
     type: 'INCOME',
     imageUrl: 'https://picsum.photos/600/800?random=4',
     status: InvoiceStatus.VERIFIED,
+    paymentStatus: PaymentStatus.UNPAID,
+    amountPaid: 0,
+    dueDate: '2023-11-21',
     uploadDate: '2023-10-22',
     extractedData: {
       counterpartyName: 'Priya Designs',
@@ -81,4 +93,11 @@ export const STATUS_COLORS = {
   [InvoiceStatus.PROCESSING]: 'bg-blue-100 text-blue-800',
   [InvoiceStatus.REVIEW_NEEDED]: 'bg-amber-100 text-amber-800',
   [InvoiceStatus.VERIFIED]: 'bg-green-100 text-green-800',
+};
+
+export const PAYMENT_STATUS_COLORS = {
+  [PaymentStatus.PAID]: 'bg-emerald-100 text-emerald-800',
+  [PaymentStatus.UNPAID]: 'bg-gray-100 text-gray-800',
+  [PaymentStatus.PARTIAL]: 'bg-blue-100 text-blue-800',
+  [PaymentStatus.OVERDUE]: 'bg-red-100 text-red-800',
 };
